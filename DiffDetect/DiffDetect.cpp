@@ -66,8 +66,8 @@ int main(int argc, char **argv)
 
 	vector<KeyPoint> kpts1, kpts2;
 	Mat desc1, desc2;
-	Mat img1 = imread("../picture/JapanL.jpg", 1);
-	Mat img2 = imread("../picture/JapanR.jpg", 1);
+	Mat img1 = imread("../picture/cheeseL.jpg", 1);
+	Mat img2 = imread("../picture/cheeseR.jpg", 1);
 	Mat gray1, gray2;
 	cvtColor(img1, gray1, cv::COLOR_RGB2GRAY);
 	cvtColor(img2, gray2, cv::COLOR_RGB2GRAY);
@@ -81,7 +81,8 @@ int main(int argc, char **argv)
 	img1.copyTo(roi1);
 	img2.copyTo(roi2);
 	//result_img = img2.clone();
-
+	Mat old_gray, and_gray;
+	old_gray = Mat::zeros(img1.size(),CV_8UC1);
 
 	float angle = -40.0, scale = 1.0;
 	cv::Point2f center(img2.cols*0.5, img2.rows*0.5);
@@ -92,7 +93,6 @@ int main(int argc, char **argv)
 	cv::Point2f pts2[] = { cv::Point2f(170, 150), cv::Point2f(170, 300), cv::Point2f(340, 290), cv::Point2f(340, 160) };
 	cv::Mat perspective_matrix = cv::getPerspectiveTransform(pts1, pts2);
 
-	angle += 1.0f;
 	affine_matrix = cv::getRotationMatrix2D(center, angle, scale);
 	cv::warpAffine(img2, img2_rotate, affine_matrix, img2.size());
 	cv::warpAffine(gray2, gray2_rotate, affine_matrix, img2.size());
@@ -113,11 +113,12 @@ int main(int argc, char **argv)
 
 		combined_img = Mat::zeros(Size(img1.size().width + img2.size().width + gap, max(img1.size().height, img2.size().height)), CV_8UC3);
 		angle += 1.0f;
+		scale = 0.8f + 0.3f * sin(angle/180.0f*CV_PI);
 		affine_matrix = cv::getRotationMatrix2D(center, angle, scale);
 		cv::warpAffine(img2, img2_rotate, affine_matrix, img2.size());
 		cv::warpAffine(gray2, gray2_rotate, affine_matrix, img2.size());
-		cv::warpPerspective(img2_rotate, img2_rotate, perspective_matrix, img2_rotate.size(), cv::INTER_LINEAR);
-		cv::warpPerspective(gray2_rotate, gray2_rotate, perspective_matrix, gray2_rotate.size(), cv::INTER_LINEAR);
+		//cv::warpPerspective(img2_rotate, img2_rotate, perspective_matrix, img2_rotate.size(), cv::INTER_LINEAR);
+		//cv::warpPerspective(gray2_rotate, gray2_rotate, perspective_matrix, gray2_rotate.size(), cv::INTER_LINEAR);
 		img1.copyTo(roi1);
 		img2_rotate.copyTo(roi2);
 
@@ -135,7 +136,7 @@ int main(int argc, char **argv)
 		vector<KeyPoint> matched1, matched2, inliers1, inliers2;
 		vector<DMatch> good_matches;
 		vector<pair<KeyPoint, KeyPoint>> matched_pair;
-		vector<Point2f> matched_pt1, matched_pt2;
+		vector<Point2f> matched_pt1, matched_pt2, perspect_pt;
 		for (size_t i = 0; i < nn_matches.size(); i++) {
 			DMatch first = nn_matches[i][0];
 			float dist1 = nn_matches[i][0].distance;
@@ -164,17 +165,38 @@ int main(int argc, char **argv)
 		if (matched1.size() < 4 || matched2.size() < 4) continue;
 
 		Mat H = findHomography(matched_pt2, matched_pt1, CV_RANSAC);
+		perspectiveTransform(matched_pt2, perspect_pt, H);
+		vector<double> norms;
+		for (int i = 0; i < perspect_pt.size(); ++i){
+			//cout << norm(matched_pt1[i] - perspect_pt[i]) << endl;
+			norms.push_back(norm(matched_pt1[i] - perspect_pt[i]));
+		}
+		std::sort(norms.begin(), norms.end());
+
+
 		Mat img2_out;
 		cv::warpPerspective(img2_rotate, img2_out, H, img2_rotate.size());
 		Mat img2_out_resize = img2_out(rect1);
 		imshow("out", img2_out);
 		Mat diff;
 		absdiff(img1, img2_out_resize, diff);
-		cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 1);
-		cv::dilate(diff, diff, cv::Mat(), cv::Point(-1, -1), 4);
-		cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 3);
+		//cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 1);
+		//cv::dilate(diff, diff, cv::Mat(), cv::Point(-1, -1), 4);
+		//cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 3);
 		imshow("diff", diff);
 
+		Mat diff_gray;
+		cvtColor(diff, diff_gray, cv::COLOR_RGB2GRAY);
+		//adaptiveThreshold(diff_gray, diff_gray, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 3, 1);
+
+		GaussianBlur(diff_gray, diff_gray, Size(7, 7), 1.5);
+		Canny(diff_gray, diff_gray, 10, 50);
+		//threshold(diff_gray, diff_gray, 10, 255, cv::THRESH_BINARY);
+		imshow("diff_gray", diff_gray);
+
+		bitwise_and(diff_gray, old_gray, and_gray);
+		old_gray = diff_gray.clone();
+		imshow("and_gray", and_gray);
 
 
 		int key = cv::waitKey(1);
