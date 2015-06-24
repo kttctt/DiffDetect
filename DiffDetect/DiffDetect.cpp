@@ -3,6 +3,7 @@
 #include "../../../util/opencv_lib.hpp"
 #include <iostream>
 #include <vector>
+#include <numeric>
 
 using namespace cv;
 using namespace std;
@@ -50,6 +51,108 @@ void Test(const cv::Mat src, cv::Mat dst){
 	return;
 }
 
+//---------------------------------------------------------------
+//【関数名　】：Test
+//【処理概要】：
+//【引数　　】：src        = 入力画像（三色8bit3ch）
+//　　　　　　：dst        = 出力画像（三色8bit3ch）
+//　　　　　　：
+//　　　　　　：
+//【戻り値　】：
+//【備考　　】：
+//--------------------------------------------------------------- 
+
+void Labeling(const cv::Mat src, cv::Mat dst, int threash=0){
+
+	cv::Mat dst_tmp = cv::Mat::zeros(src.size(), CV_8U);
+
+	//int src_channel = src.channels();	// channel 数
+	//if (src_channel == 1) bgr_img[0] = src.clone();	// 単色
+	//else cv::split(src, bgr_img);					// 三色(BGR)
+
+	int min_id_default = 9999;
+	int min_id = min_id_default;
+
+	vector<int> index_hash;
+	vector<int> index_sort(4);
+	for (int y = 1; y < src.rows; ++y){
+		for (int x = 1; x < src.cols; ++x){
+			if (src.channels() == 3){
+				if (src.data[y * src.step + x * src.elemSize() + 0] > threash || src.data[y * src.step + x * src.elemSize() + 1] > threash || src.data[y * src.step + x * src.elemSize() + 2] > threash){
+					index_sort[0] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					index_sort[1] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 0)* dst_tmp.elemSize()]);
+					index_sort[2] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x + 1)* dst_tmp.elemSize()]);
+					index_sort[3] = static_cast<int>(dst_tmp.data[(y - 0) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					sort(index_sort.begin(), index_sort.end());
+					if (accumulate(index_sort.begin(), index_sort.end(), 0) == 0){
+						index_hash.push_back(index_hash.size() + 1);
+						dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = index_hash.size();
+					}
+					else{
+						//cout << accumulate(index_sort.begin(), index_sort.end(), 0) << endl;
+						min_id = min_id_default;
+						for (int i = 0; i < 4; ++i){
+							if (index_sort[i] == 0)continue;
+							if (min_id == min_id_default){
+								min_id = index_sort[i];
+							}
+							else{
+								index_hash[index_sort[i]-1] = min_id;
+								dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = min_id;
+							}
+						}
+					}
+
+					//cout << min_id << endl;
+
+				}
+			}
+			else {
+				if (src.data[y * src.step + x * src.elemSize()] > threash){
+					index_sort[0] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					index_sort[1] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 0)* dst_tmp.elemSize()]);
+					index_sort[2] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x + 1)* dst_tmp.elemSize()]);
+					index_sort[3] = static_cast<int>(dst_tmp.data[(y - 0) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					sort(index_sort.begin(), index_sort.end());
+					if (accumulate(index_sort.begin(), index_sort.end(), 0) == 0){
+						index_hash.push_back(index_hash.size() + 1);
+						dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = index_hash.size();
+					}
+					else{
+						//cout << accumulate(index_sort.begin(), index_sort.end(), 0) << endl;
+						min_id = min_id_default;
+						for (int i = 0; i < 4; ++i){
+							if (index_sort[i] == 0)continue;
+							if (min_id == min_id_default){
+								min_id = index_sort[i];
+							}
+							else{
+								index_hash[index_sort[i] - 1] = min_id;
+								dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = min_id;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	//if (src_channel == 1)  bgr_img[0].copyTo(dst);	// 単色
+	//else cv::merge(bgr_img, 3, dst);				// 三色(BGR)
+	std::sort(index_hash.begin(), index_hash.end());
+	index_hash.erase(std::unique(index_hash.begin(), index_hash.end()), index_hash.end());
+
+	for (auto v : index_hash){
+		cout << v << endl;
+	}
+	threshold(dst_tmp, dst_tmp, 0, 255, cv::THRESH_BINARY);
+	imshow("aaa", dst_tmp);
+	waitKey(0);
+	return;
+}
+
+
+
 int main(int argc, char **argv)
 {
 	//const int WIDTH = 640;  // 幅
@@ -66,8 +169,8 @@ int main(int argc, char **argv)
 
 	vector<KeyPoint> kpts1, kpts2;
 	Mat desc1, desc2;
-	Mat img1 = imread("../picture/cheeseL.jpg", 1);
-	Mat img2 = imread("../picture/cheeseR.jpg", 1);
+	Mat img1 = imread("../picture/ItalyL.jpg", 1);
+	Mat img2 = imread("../picture/ItalyR.jpg", 1);
 	Mat gray1, gray2;
 	cvtColor(img1, gray1, cv::COLOR_RGB2GRAY);
 	cvtColor(img2, gray2, cv::COLOR_RGB2GRAY);
@@ -179,25 +282,73 @@ int main(int argc, char **argv)
 		Mat img2_out_resize = img2_out(rect1);
 		imshow("out", img2_out);
 		Mat diff;
+		Mat img1_tmp;
+		//GaussianBlur(img1, img1_tmp, Size(5, 5), 1.5);
+		//GaussianBlur(img2_out_resize, img2_out_resize, Size(5, 5), 1.5);
 		absdiff(img1, img2_out_resize, diff);
-		//cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 1);
-		//cv::dilate(diff, diff, cv::Mat(), cv::Point(-1, -1), 4);
-		//cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 3);
+		cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 1);
+		cv::dilate(diff, diff, cv::Mat(), cv::Point(-1, -1), 4);
+		cv::erode(diff, diff, cv::Mat(), cv::Point(-1, -1), 3);
 		imshow("diff", diff);
 
 		Mat diff_gray;
 		cvtColor(diff, diff_gray, cv::COLOR_RGB2GRAY);
 		//adaptiveThreshold(diff_gray, diff_gray, 255, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY, 3, 1);
 
-		GaussianBlur(diff_gray, diff_gray, Size(7, 7), 1.5);
-		Canny(diff_gray, diff_gray, 10, 50);
+		//GaussianBlur(diff_gray, diff_gray, Size(7, 7), 1.5);
+		//Canny(diff_gray, diff_gray, 10, 50);
 		//threshold(diff_gray, diff_gray, 10, 255, cv::THRESH_BINARY);
 		imshow("diff_gray", diff_gray);
 
-		bitwise_and(diff_gray, old_gray, and_gray);
-		old_gray = diff_gray.clone();
-		imshow("and_gray", and_gray);
 
+		//bitwise_and(diff_gray, old_gray, and_gray);
+		//old_gray = diff_gray.clone();
+		//imshow("and_gray", and_gray);
+
+
+		Labeling(diff, diff, 50);
+		
+		const int ch_width = 260;
+		const int sch = diff_gray.channels();
+		Mat hist_img(Size(ch_width * sch, 200), CV_8UC3, Scalar::all(255));
+
+		vector<MatND> hist(3);
+		const int hist_size = 256;
+		const int hdims[] = { hist_size };
+		const float hranges[] = { 0, 256 };
+		const float* ranges[] = { hranges };
+		double max_val = .0;
+
+		if (sch == 1) {
+			// (3a)if the source image has single-channel, calculate its histogram
+			calcHist(&diff_gray, 1, 0, Mat(), hist[0], 1, hdims, ranges, true, false);
+			minMaxLoc(hist[0], 0, &max_val);
+		}
+		else {
+			// (3b)if the souce image has multi-channel, calculate histogram of each plane
+			for (int i = 0; i<sch; ++i) {
+				calcHist(&diff_gray, 1, &i, Mat(), hist[i], 1, hdims, ranges, true, false);
+				double tmp_val;
+				minMaxLoc(hist[i], 0, &tmp_val);
+				max_val = max_val < tmp_val ? tmp_val : max_val;
+			}
+		}
+
+		// (4)scale and draw the histogram(s)
+		Scalar color = Scalar::all(100);
+		for (int i = 0; i<sch; i++) {
+			if (sch == 3)
+				color = Scalar((0xaa << i * 8) & 0x0000ff, (0xaa << i * 8) & 0x00ff00, (0xaa << i * 8) & 0xff0000, 0);
+			hist[i].convertTo(hist[i], hist[i].type(), max_val ? 200. / max_val : 0., 0);
+			for (int j = 0; j<hist_size; ++j) {
+				int bin_w = saturate_cast<int>((double)ch_width / hist_size);
+				rectangle(hist_img,
+					Point(j*bin_w + (i*ch_width), hist_img.rows),
+					Point((j + 1)*bin_w + (i*ch_width), hist_img.rows - saturate_cast<int>(hist[i].at<float>(j))),
+					color, -1);
+			}
+		}
+		imshow("Histogram", hist_img);
 
 		int key = cv::waitKey(1);
 		if (key == 'q') break; // キー入力で終了
