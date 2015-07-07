@@ -62,7 +62,7 @@ void Test(const cv::Mat src, cv::Mat dst){
 //【備考　　】：
 //--------------------------------------------------------------- 
 
-void Labeling(const cv::Mat src, cv::Mat dst, int threash=0){
+void Labeling(const cv::Mat src, cv::Mat dst, int thresh=0){
 
 	cv::Mat dst_tmp = cv::Mat::zeros(src.size(), CV_8U);
 
@@ -78,7 +78,7 @@ void Labeling(const cv::Mat src, cv::Mat dst, int threash=0){
 	for (int y = 1; y < src.rows; ++y){
 		for (int x = 1; x < src.cols; ++x){
 			if (src.channels() == 3){
-				if (src.data[y * src.step + x * src.elemSize() + 0] > threash || src.data[y * src.step + x * src.elemSize() + 1] > threash || src.data[y * src.step + x * src.elemSize() + 2] > threash){
+				if (src.data[y * src.step + x * src.elemSize() + 0] > thresh || src.data[y * src.step + x * src.elemSize() + 1] > thresh || src.data[y * src.step + x * src.elemSize() + 2] > thresh){
 					index_sort[0] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
 					index_sort[1] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 0)* dst_tmp.elemSize()]);
 					index_sort[2] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x + 1)* dst_tmp.elemSize()]);
@@ -108,7 +108,7 @@ void Labeling(const cv::Mat src, cv::Mat dst, int threash=0){
 				}
 			}
 			else {
-				if (src.data[y * src.step + x * src.elemSize()] > threash){
+				if (src.data[y * src.step + x * src.elemSize()] > thresh){
 					index_sort[0] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
 					index_sort[1] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 0)* dst_tmp.elemSize()]);
 					index_sort[2] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x + 1)* dst_tmp.elemSize()]);
@@ -151,7 +151,147 @@ void Labeling(const cv::Mat src, cv::Mat dst, int threash=0){
 	return;
 }
 
+//---------------------------------------------------------------
+//【関数名　】：Test
+//【処理概要】：
+//【引数　　】：src        = 入力画像（三色8bit3ch）
+//　　　　　　：dst        = 出力画像（三色8bit3ch）
+//　　　　　　：
+//　　　　　　：
+//【戻り値　】：
+//【備考　　】：
+//--------------------------------------------------------------- 
 
+void LabelingArea(const cv::Mat src, cv::Mat dst, int thresh = 0){
+
+	cv::Mat dst_tmp = cv::Mat::zeros(src.size(), CV_8U);
+
+	//int src_channel = src.channels();	// channel 数
+	//if (src_channel == 1) bgr_img[0] = src.clone();	// 単色
+	//else cv::split(src, bgr_img);					// 三色(BGR)
+
+	int min_id_default = 9999;
+	int min_id = min_id_default;
+
+	vector<pair<int, int>> index_hash;
+	vector<int> index_sort(4);
+	for (int y = 1; y < src.rows; ++y){
+		for (int x = 1; x < src.cols; ++x){
+			if (src.channels() == 3){
+				if (src.data[y * src.step + x * src.elemSize() + 0] > thresh || src.data[y * src.step + x * src.elemSize() + 1] > thresh || src.data[y * src.step + x * src.elemSize() + 2] > thresh){
+					index_sort[0] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					index_sort[1] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 0)* dst_tmp.elemSize()]);
+					index_sort[2] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x + 1)* dst_tmp.elemSize()]);
+					index_sort[3] = static_cast<int>(dst_tmp.data[(y - 0) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					sort(index_sort.begin(), index_sort.end());
+					if (accumulate(index_sort.begin(), index_sort.end(), 0) == 0){
+						index_hash.push_back(pair<int,int>(index_hash.size() + 1,1));
+						dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = index_hash.size();
+					}
+					else{
+						//cout << accumulate(index_sort.begin(), index_sort.end(), 0) << endl;
+						min_id = min_id_default;
+						for (int i = 0; i < 4; ++i){
+							if (index_sort[i] == 0)continue;
+							if (min_id == min_id_default){
+								min_id = index_sort[i];
+							}
+							else{
+								index_hash[index_sort[i] - 1].first = min_id;
+								index_hash[index_sort[i] - 1].second++;
+								dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = min_id;
+							}
+						}
+					}
+
+					//cout << min_id << endl;
+
+				}
+			}
+			else {
+				if (src.data[y * src.step + x * src.elemSize()] > thresh){
+					index_sort[0] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					index_sort[1] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x - 0)* dst_tmp.elemSize()]);
+					index_sort[2] = static_cast<int>(dst_tmp.data[(y - 1) * dst_tmp.step + (x + 1)* dst_tmp.elemSize()]);
+					index_sort[3] = static_cast<int>(dst_tmp.data[(y - 0) * dst_tmp.step + (x - 1)* dst_tmp.elemSize()]);
+					sort(index_sort.begin(), index_sort.end());
+					if (accumulate(index_sort.begin(), index_sort.end(), 0) == 0){
+						index_hash.push_back(pair<int, int>(index_hash.size() + 1, 1));
+						dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = index_hash.size();
+					}
+					else{
+						//cout << accumulate(index_sort.begin(), index_sort.end(), 0) << endl;
+						min_id = min_id_default;
+						for (int i = 0; i < 4; ++i){
+							if (index_sort[i] == 0)continue;
+							if (min_id == min_id_default){
+								min_id = index_sort[i];
+							}
+							else{
+								index_hash[index_sort[i] - 1].first = min_id;
+								index_hash[index_sort[i] - 1].second++;
+								dst_tmp.data[y * dst_tmp.step + x * dst_tmp.elemSize()] = min_id;
+							}
+						}
+					}
+				}
+			}
+				//cout << min_id << endl;			}
+		}
+	}
+
+	//if (src_channel == 1)  bgr_img[0].copyTo(dst);	// 単色
+	//else cv::merge(bgr_img, 3, dst);				// 三色(BGR)
+	std::sort(index_hash.begin(), index_hash.end());
+	//index_hash.erase(std::unique(index_hash.begin(), index_hash.end()), index_hash.end());
+	vector<pair<int, int>> index_out;
+	vector<pair<int, int>> index_table;
+	int now_id = 0;
+	int step = 1;
+	for (auto v : index_hash){
+		if (now_id != v.first){
+			now_id = v.first;
+			index_out.push_back(pair<int, int>(step, v.second));
+			index_table.push_back(pair<int, int>(v.first, step));
+			step++;
+		}
+		else{
+			index_out[step-2].second += v.second;
+		}
+	}
+
+	for (auto v : index_out){
+		cout << v.first << " , " << v.second << endl;
+	}
+	cout << endl <<  index_out.size() << endl;
+
+	Mat dst_test;
+	threshold(dst_tmp, dst_test, 0, 255, cv::THRESH_BINARY);
+	imshow("aaa", dst_test);
+	waitKey(0);
+
+
+	Mat dst_thresh, dst_thresh2, dst_thresh3;
+	Mat dst_out = Mat::zeros(dst_tmp.size(),CV_8UC1);
+	const int area_thresh = 100;
+	for (int i = 0; i < index_out.size(); ++i){
+		if (index_out[i].second > area_thresh){
+			threshold(dst_tmp, dst_thresh, index_table[i].first-1, 255, cv::THRESH_TOZERO);
+			threshold(dst_tmp, dst_thresh2, index_table[i].first, 255, cv::THRESH_TOZERO);
+			absdiff(dst_thresh2, dst_thresh, dst_thresh3);
+			threshold(dst_thresh3, dst_thresh3, 1, index_table[i].second, cv::THRESH_BINARY);
+			//imshow("test", dst_thresh3);
+			//waitKey(0);
+			add(dst_out, dst_thresh3, dst_out);
+		}
+	}
+
+	threshold(dst_out, dst_tmp, 0, 255, cv::THRESH_BINARY);
+
+	imshow("aaa", dst_tmp);
+	waitKey(0);
+	return;
+}
 
 int main(int argc, char **argv)
 {
@@ -167,10 +307,23 @@ int main(int argc, char **argv)
 	//Mat bin_img(HEIGHT, WIDTH, CV_8UC1);
 	//Mat result_img(HEIGHT, WIDTH, CV_8UC3);
 
+	std::string name;
+	std::string path;
+	std::string input;
+	if (argc > 1){
+		input = argv[1];
+		std::string::size_type pos = input.find_last_of('L');
+		path = input.substr(0, pos);
+	}
+	else{
+		path = "../picture/Japan";
+	}
+
 	vector<KeyPoint> kpts1, kpts2;
 	Mat desc1, desc2;
-	Mat img1 = imread("../picture/ItalyL.jpg", 1);
-	Mat img2 = imread("../picture/ItalyR.jpg", 1);
+	//Mat img1 = imread("../picture/77L.jpg", 1);path+number+ "LEFT"+frameNum+".bmp"
+	Mat img1 = imread(path+"L.jpg", 1);
+	Mat img2 = imread(path+"R.jpg", 1);
 	Mat gray1, gray2;
 	cvtColor(img1, gray1, cv::COLOR_RGB2GRAY);
 	cvtColor(img2, gray2, cv::COLOR_RGB2GRAY);
@@ -217,6 +370,9 @@ int main(int argc, char **argv)
 		combined_img = Mat::zeros(Size(img1.size().width + img2.size().width + gap, max(img1.size().height, img2.size().height)), CV_8UC3);
 		angle += 1.0f;
 		scale = 0.8f + 0.3f * sin(angle/180.0f*CV_PI);
+
+		//angle = 0.0, scale = 1.0;
+
 		affine_matrix = cv::getRotationMatrix2D(center, angle, scale);
 		cv::warpAffine(img2, img2_rotate, affine_matrix, img2.size());
 		cv::warpAffine(gray2, gray2_rotate, affine_matrix, img2.size());
@@ -306,7 +462,7 @@ int main(int argc, char **argv)
 		//imshow("and_gray", and_gray);
 
 
-		Labeling(diff, diff, 50);
+		//LabelingArea(diff_gray, diff, 10);
 		
 		const int ch_width = 260;
 		const int sch = diff_gray.channels();
